@@ -1,13 +1,25 @@
 """
 NewWalkVsScan.py - Simplified example of showing os.walk vs os.scandir.
+
+usage: NewWalkVsScan.py [-h] [-d ROOTDIR] [-o OUTPUT]
+
+Test using os.walk vs. using os.scandir to traverse a directory structure.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -d ROOTDIR, --rootdir ROOTDIR
+                        root directory of tree to be traversed
+  -o OUTPUT, --output OUTPUT
+                        output file to contain the results of walk vs. scan
+
 """
-import argparse
-import time
+from argparse import ArgumentParser
 from collections import deque
-from logging import getLogger, debug, error
+from contextlib import contextmanager
+from logging import getLogger
 from os import walk, scandir, sep, getcwd, stat
-from os.path import abspath, join
-from typing import List
+from os.path import join
+from time import perf_counter, localtime
 
 __author__ = 'Travis Risner'
 __project__ = "walk_vs_scan"
@@ -30,7 +42,7 @@ class NewWalkVsScanClass:
         Setup for walk vs scan.
         """
 
-        self.parser = argparse.ArgumentParser(
+        self.parser = ArgumentParser(
             description='Test using os.walk vs. using os.scandir to '
                         'traverse a directory structure.'
         )
@@ -132,7 +144,7 @@ class TryWalk:
                 for file in self.walk_file_names:
                     self.walk_file_stat = stat(join(self.walk_dir_path, file))
                     self.epoch_time = self.walk_file_stat.st_mtime
-                    self.local_time = time.localtime(self.epoch_time)
+                    self.local_time = localtime(self.epoch_time)
                     self.file_date = '{0}/{1}/{2}'.format(
                         str(self.local_time.tm_mon),
                         str(self.local_time.tm_mday),
@@ -232,7 +244,7 @@ class TryScandir:
                               file=out_file)
                         self.scan_dir_stack.append(self.scan_full_name)
 
-                #   b. If the entry is a file, process it.
+                # b. If the entry is a file, process it.
                 elif self.scan_dir_entry.is_file:
                     # print(' - was a file.  Processing file',
                     #       file=out_file)
@@ -240,7 +252,7 @@ class TryScandir:
                                           self.root_length - 1:]
                     self.scan_file_stat = self.scan_dir_entry.stat()
                     self.epoch_time = self.scan_file_stat.st_mtime
-                    self.local_time = time.localtime(self.epoch_time)
+                    self.local_time = localtime(self.epoch_time)
                     self.file_date = '{0}/{1}/{2}'.format(
                         str(self.local_time.tm_mon),
                         str(self.local_time.tm_mday),
@@ -254,36 +266,20 @@ class TryScandir:
                           ' >>>'.format(self.scan_full_name), file=out_file)
 
 
-class JPTimer:
+@contextmanager
+def timing(label: str):
     """
-    Timer invoked using a "with" statement.
+    Timing routine using the context manager.
 
-    For example:
-        with JPTimer() as t:
-            <code to be timed>
+    From "20 Python Libraries You Aren’t Using (But Should)" by Caleb Hattingh.
+    Copyright © 2016 O'Reilly Media, Inc.  ISBN: 978-1-491-96792-8
 
-        result = t.interval
+    :param label:
+    :return:
     """
-    def __enter__(self):
-        """
-        Start timing something.
-
-        Note - the with statement will invoke this automatically.
-        :return: an instance of this class
-        """
-        self.start = time.process_time()
-        return self
-
-    def __exit__(self, *args):
-        """
-        Stop timing something and calculate the difference.
-
-        Note - the with statement will invoke this automatically.
-        :param args:
-        :return:
-        """
-        self.end = time.process_time()
-        self.interval = self.end - self.start
+    t0 = perf_counter()
+    yield lambda: (label, t1 - t0)
+    t1 = perf_counter()
 
 
 if __name__ == "__main__":
@@ -298,21 +294,21 @@ if __name__ == "__main__":
     print('Output to file: {}\n'.format(printfile))
 
     # start with the older os.walk
-    with JPTimer() as walk_timer:
+    with timing('Using os.walk') as walk_timer:
         print('===== Try os.walk =====\n', file=outstream)
         dir_walk = TryWalk()
         dir_walk.walk_dir(root_dir, outstream)
 
     # now try the newer os.scandir
-    with JPTimer() as scan_timer:
+    with timing('Using os.scandir') as scan_timer:
         print('\n\n===== Now try os.scandir =====\n', file=outstream)
         dir_scan = TryScandir()
         dir_scan.scan_dir(root_dir, outstream)
 
     # close up shop
     print('\n\n=============================\n', file=outstream)
-    print('Using os.walk    took : {:f} seconds.'.format(walk_timer.interval))
-    print('Using os.scandir took : {:f} seconds'.format(scan_timer.interval))
+    print('{0[0]:20} took: {0[1]:.6f} seconds.'.format(walk_timer()))
+    print('{0[0]:20} took: {0[1]:.6f} seconds.'.format(scan_timer()))
     outstream.close()
 
 # EOF
